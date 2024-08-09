@@ -2913,7 +2913,7 @@ namespace ACadSharp.IO.DWG
 			//  43  Block Content Rotation
 			mLeader.BlockContentRotation = this._objectReader.ReadBitDouble();
 			//  176 Block Content Connection Type
-			mLeader.BlockContentConnection = (BlockContentConnectionType)_objectReader.ReadBitShort();
+			mLeader.BlockContentConnection = (BlockContentConnectionType)this._objectReader.ReadBitShort();
 			//  293 Enable Annotation Scale/Is annotative
 			mLeader.EnableAnnotationScale = this._objectReader.ReadBit();
 
@@ -2935,7 +2935,7 @@ namespace ACadSharp.IO.DWG
 			}
 
 			//	BL Number of Block Labels 
-			int blockLabelCount = this._objectReader.ReadBitShort();
+			int blockLabelCount = this._objectReader.ReadBitLong();
 			for (int bl = 0; bl < blockLabelCount; bl++)
 			{
 				//  330 Block Attribute definition handle (hard pointer)
@@ -2994,7 +2994,7 @@ namespace ACadSharp.IO.DWG
 
 			//	Common
 			//	BD	40	Overall scale
-			annotContext.ScaleFactor = _objectReader.ReadBitDouble();
+			annotContext.ScaleFactor = this._objectReader.ReadBitDouble();
 			//	3BD	10	Content base point
 			annotContext.ContentBasePoint = this._objectReader.Read3BitDouble();
 			//	BD	41	Text height
@@ -3218,13 +3218,13 @@ namespace ACadSharp.IO.DWG
 				leaderLine.SegmentIndex = this._objectReader.ReadBitLong();
 
 				//	Start/end point pairs
-				//	3BD	11	Start Point
-				//	3BD	12	End point
 				int startEndPointCount = this._objectReader.ReadBitLong();
 				for (int sep = 0; sep < startEndPointCount; sep++)
 				{
 					leaderLine.StartEndPoints.Add(new StartEndPointPair(
+						//	3BD	11	Start Point
 						this._objectReader.Read3BitDouble(),
+						//	3BD	12	End point
 						this._objectReader.Read3BitDouble()));
 				}
 			}
@@ -3330,7 +3330,7 @@ namespace ACadSharp.IO.DWG
 				mLeaderStyle.TextAlignAlwaysLeft = this._objectReader.ReadBit();
 			}//	END IF IsNewFormat OR DXF file
 			 //	BD	46	Align space
-			mLeaderStyle.AlignSpace = _objectReader.ReadBitDouble();
+			mLeaderStyle.AlignSpace = this._objectReader.ReadBitDouble();
 			//	H	343	Block handle (hard pointer)
 			template.BlockContentHandle = this.handleReference();
 			//	CMC	94	Block color
@@ -5347,7 +5347,6 @@ namespace ACadSharp.IO.DWG
 			Mesh mesh = new Mesh();
 			CadMeshTemplate template = new CadMeshTemplate(mesh);
 
-#if TEST
 			this.readCommonEntityData(template);
 
 			//Same order as dxf?
@@ -5355,12 +5354,54 @@ namespace ACadSharp.IO.DWG
 			//71 BS Version
 			mesh.Version = this._objectReader.ReadBitShort();
 			//72 BS BlendCrease
-			mesh.BlendCrease = this._objectReader.ReadBitShort();
+			mesh.BlendCrease = this._objectReader.ReadBit();
+			//91 BL SubdivisionLevel
+			mesh.SubdivisionLevel = this._objectReader.ReadBitLong();
 
-			var dict = DwgStreamReaderBase.Explore(this._objectReader);
-#endif
+			//92 BL nvertices
+			int nvertices = this._objectReader.ReadBitLong();
+			for (int i = 0; i < nvertices; i++)
+			{
+				//10 3BD vertice
+				XYZ v = this._objectReader.Read3BitDouble();
+				mesh.Vertices.Add(v);
+			}
 
-			return null;
+			//Faces
+			int nfaces = this._objectReader.ReadBitLong();
+			for (int i = 0; i < nfaces; i++)
+			{
+				int faceSize = _objectReader.ReadBitLong();
+				int[] arr = new int[faceSize];
+				for (int j = 0; j < faceSize; j++)
+				{
+					arr[j] = _objectReader.ReadBitLong();
+				}
+
+				i += faceSize;
+
+				mesh.Faces.Add(arr.ToArray());
+			}
+
+			//Edges
+			int nedges = _objectReader.ReadBitLong();
+			for (int k = 0; k < nedges; k++)
+			{
+				int start = _objectReader.ReadBitLong();
+				int end = _objectReader.ReadBitLong();
+				mesh.Edges.Add(new Mesh.Edge(start, end));
+			}
+
+			//Crease
+			int ncrease = _objectReader.ReadBitLong();
+			for (int l = 0; l < ncrease; l++)
+			{
+				Mesh.Edge edge = mesh.Edges[l];
+				edge.Crease = _objectReader.ReadBitDouble();
+				mesh.Edges[l] = edge;
+			}
+
+			return template;
 		}
 
 		private CadTemplate readPlaceHolder()
